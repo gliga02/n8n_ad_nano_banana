@@ -1,0 +1,678 @@
+{
+  "name": "Ad Video Creator",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "text": "You are a senior product analysis and creative marketing expert. Your task is to deeply analyze product images that I send you and produce a structured, professional report that will be used by another AI agent to create:\n\na professional ad image of the product\n\na short video advertisement for marketing the product.\n\nYour analysis must be detailed, actionable, and creative. Cover all of the following points with precision:\n\nProduct Type & Category: Clearly define what the product is and which market segment it belongs to.\n\nCore Features & Characteristics: List the product’s main attributes, functionality, and physical traits.\n\nTarget Audience: Identify who the product appeals to (demographics, lifestyle, pain points, aspirations).\n\nUnique Selling Points (USPs): Highlight what makes this product stand out from competitors.\n\nVisual Elements & Design Cues: Describe the visual style, notable design details, and any symbolic elements.\n\nMarketing Angles: Suggest storylines, hooks, and emotional appeals for advertising.\n\nColor Scheme & Mood: Identify dominant colors, emotional tone, and the kind of atmosphere they project.\n\nBrand Positioning Opportunities: Suggest how the product could be positioned in the market (luxury, affordable, eco-friendly, innovative, trendy, etc.).\n\nBe specific, professional, and creative. Write your analysis as if it is a creative brief for a top-tier marketing agency, so the next AI agent has everything it needs to design compelling visuals and an engaging short video ad.",
+        "imageUrls": "={{$json.dataUrls.map(d => d.secure_url).join(',')}}",
+        "options": {
+          "maxTokens": 800
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        752,
+        -312
+      ],
+      "id": "67006650-129a-4db1-8a64-a4f8835e1a78",
+      "name": "Analyze image",
+      "credentials": {
+        "openAiApi": {
+          "id": "YgSAV3sK2BAFtM7u",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "Image Upload",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Upload your product prictures.",
+              "fieldType": "file",
+              "acceptFileTypes": ".jpg,.png",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -144,
+        -312
+      ],
+      "id": "152dc4fa-febc-4f98-871f-37e25f0b60aa",
+      "name": "On form submission",
+      "webhookId": "f42bb848-b63b-4450-b3b9-2bf189b6ff7a"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Works with any n8n Form upload field names.\n// One output item per file: { json: { binaryKey, fileName, mimeType }, binary: { [binaryKey]: file } }\n\nconst inputItems = $input.all();\nconst out = [];\n\nfor (const item of inputItems) {\n  const binary = item.binary || {};\n  const keys = Object.keys(binary);\n\n  for (const key of keys) {\n    const file = binary[key];\n    out.push({\n      json: {\n        binaryKey: key,\n        fileName: file.fileName,\n        mimeType: file.mimeType,\n      },\n      binary: { [key]: file },\n    });\n  }\n}\n\nif (out.length === 0) {\n  const debug = inputItems.map(i => Object.keys(i.binary || {}));\n  throw new Error(`No uploaded files found. Incoming binary keys: ${JSON.stringify(debug)}`);\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        -312
+      ],
+      "id": "4a5312e3-644b-4a96-af7d-fbd5f8537820",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cloudinary.com/v1_1/YOUR_CLOUDINARY_NAME/image/upload",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "upload_preset",
+              "value": "unsigned_form_upload"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "={{ $json.binaryKey }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        -312
+      ],
+      "id": "08773273-63b9-4c84-9006-1a2dbdcf468e",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "dataUrls",
+        "include": "specifiedFields",
+        "fieldsToInclude": "secure_url",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        528,
+        -312
+      ],
+      "id": "38a98672-fde0-4fd0-8165-00d45648e2b5",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are given the following product image analysis. Use it as the basis for a professional advertising concept.\n\nIMAGE ANALYSIS (verbatim input):\n{{ $json.content }}\n\nTASK\n- Create a compelling ad SCENARIO that a creative team can follow (1–3 short paragraphs or a tight bullet outline).\n- Produce two generation prompts:\n  - nano_prompt: a precise, production-ready prompt for the Google “Nano Banana” image model. Assume we will provide the analyzed product image(s) as reference images; instruct composition, framing, camera/lens, lighting, background, color palette, mood, and any stylistic directives. Keep it free of brand-infringing terms.\n  - veo_prompt: a production-ready prompt for the Google “Veo 3” video model to make a short ad (6–12 seconds) that uses the Nano Banana output as a key visual/first frame. Specify pacing, shot list or beats, transitions, motion cues, on-screen text (if any), sound/mood guidance, and call-to-action.\n- Also specify:\n  - tone: the desired brand voice/tone (e.g., “confident, minimalist, premium”).\n  - target_audience: the most relevant audience segment(s).\n\nOUTPUT FORMAT (STRICT JSON ONLY)\nReturn exactly one JSON object with this schema:\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"scenario\": { \"type\": \"string\" },\n    \"nano_prompt\": { \"type\": \"string\" },\n    \"veo_prompt\": { \"type\": \"string\" },\n    \"tone\": { \"type\": \"string\" },\n    \"target_audience\": { \"type\": \"string\" }\n  },\n  \"required\": [\"scenario\",\"nano_prompt\",\"veo_prompt\"]\n}\n\nCONSTRAINTS\n- Do not include markdown.\n- Do not include explanations.\n- Keep “nano_prompt” and “veo_prompt” directly usable by the respective models.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a senior advertising specialist who creates high-converting visual ads and short video spots that quickly capture attention using proven psychological triggers (e.g., contrast, curiosity gaps, social proof, scarcity, authority, novelty, distinctiveness). You craft clear, production-ready prompts for image and video generation systems and write scenarios that are concise, persuasive, and aligned with brand and audience.\n\nFollow these rules:\n- Use the user-provided analysis as ground truth; do not invent product details.\n- Optimize for scannability (short sentences, clear structure).\n- Return STRICT JSON only, matching the provided schema (no markdown, no commentary).\n- Keep “nano_prompt” tailored for an image-generation model.\n- Keep “veo_prompt” tailored for a video-generation model that can use the generated image as a visual asset."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        976,
+        -312
+      ],
+      "id": "4d2b1e7b-71eb-4e27-a3ff-94e26fcb4ed4",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1392,
+        -1104
+      ],
+      "id": "a156adb9-89e9-41a8-9833-b79a2c4f1426",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YgSAV3sK2BAFtM7u",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "=### Thinking tool description (for AI Agent)\n\nName: StrategicAdThinking\nPurpose: Plan the ad concept before producing outputs. Use a private scratchpad to reason; never expose the scratchpad. Return only the final JSON required by the main task.\n\nInstructions to the tool:\n- Ingest inputs:\n  - image_analysis: verbatim analysis text\n  - image_urls: array of image URLs (reference visuals)\n- Do structured reasoning in a hidden scratchpad:\n  - Extract factual product attributes, benefits, differentiators, constraints (claims, compliance, brand safety).\n  - Identify audience segments and their core motivations/pains inferred from the analysis.\n  - Choose 1 primary creative angle and 1 backup angle; note psychological triggers to use (contrast, curiosity, authority, social proof, scarcity, novelty).\n  - Define the visual strategy: composition, focal point, color/mood, lighting, setting, props, negative content to avoid.\n  - Draft an image prompt outline (camera/lens, lighting, shot type, background, color palette, style keywords; reference use of provided images).\n  - Draft a video plan: 6–12s beat-by-beat storyboard, transitions, motion, on-screen text, CTA, pacing, music/mood cues; specify first frame aligns with the image output.\n  - Decide tone (e.g., premium/minimalist/energetic) and finalize target audience phrasing.\n- Guardrails:\n  - Use only facts present in image_analysis; do not invent specs or claims.\n  - Avoid trademarks/celebrity likenesses/unlicensed logos.\n  - Keep prompts model-ready, concise, unambiguous; include negatives/avoid lists where helpful.\n  - Do not reveal the scratchpad or intermediate reasoning. Output must be strictly the JSON defined by the main schema.\n\nTool output (to main agent, not user):\n- scenario: tightened narrative or bullet outline for the ad concept\n- nano_prompt: production-ready prompt for the image model using provided image URLs as references; include composition, lighting, style, negative prompts\n- veo_prompt: production-ready prompt for the video model referencing that the Nano image is used as the key visual/first frame; include shot list, motion cues, overlays/CTA, pacing\n- tone: short descriptor of voice/brand feel\n- target_audience: concise audience description\n\nNotes for implementation:\n- The tool must never print thoughts/scratchpad content in the final response.\n- If inputs are insufficient, internally assume neutral defaults but do not fabricate product claims; keep prompts generic yet professional."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -1104
+      ],
+      "id": "a9d9af95-8ac6-43f7-8f04-8d386d927a2e",
+      "name": "Think"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"scenario\": { \"type\": \"string\" },\n    \"nano_prompt\": { \"type\": \"string\" },\n    \"veo_prompt\": { \"type\": \"string\" },\n    \"tone\": { \"type\": \"string\" },\n    \"target_audience\": { \"type\": \"string\" }\n  },\n  \"required\": [\"scenario\",\"nano_prompt\",\"veo_prompt\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2288,
+        -1088
+      ],
+      "id": "1e890012-775c-47e7-a4be-6d2e465debb3",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "message": "=Scenario:\n{{ $json.output.scenario }}",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "approved",
+              "placeholder": "Approved? (yes/no)",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "change",
+              "fieldType": "textarea",
+              "placeholder": "What would you like to change?"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2096,
+        -528
+      ],
+      "id": "46ae1606-54f5-4150-add3-8a946d59dfa2",
+      "name": "Send message and wait for response",
+      "webhookId": "8a63137d-5da6-44c5-a34e-1a571199570d",
+      "credentials": {
+        "telegramApi": {
+          "id": "415W1dxx5UoOHLMz",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a3cb9a07-691e-4e4a-ba32-ae8e5db2898c",
+              "leftValue": "={{ $json.data.approved.toLowerCase() }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1456,
+        -48
+      ],
+      "id": "d41c888f-775a-439c-ad8e-99d29fc71020",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Revise the ad concept and prompts according to the feedback below. Start from the previous outputs and improve them without changing factual details from the analysis.\n\nINPUTS\n- IMAGE ANALYSIS (verbatim):\n{{ $('Analyze image').item.json.content }}\n- PREVIOUS OUTPUT (verbatim JSON):\nScenario:\n{{ $('AI Agent').item.json.output.scenario }}\nNano prompt:\n{{ $('AI Agent').item.json.output.nano_prompt }}\nVeo prompt:\n{{ $('AI Agent').item.json.output.veo_prompt }}\n- USER FEEDBACK (verbatim):\n{{ $json.data.change }}\n\n",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a senior advertising specialist who refines ad concepts into higher-converting visual ads and short video spots. You leverage proven psychological triggers (contrast, curiosity gaps, social proof, scarcity, authority, novelty) and produce production-ready prompts for image and video models.\n\nYour job is to revise an existing ad scenario and its generation prompts based on user feedback. Preserve factual accuracy and constraints from the original analysis; do not invent product details. Optimize clarity, distinctiveness, and conversion intent.\n\nRules:\n- Use the prior scenario/prompts as a baseline and apply the user’s feedback precisely.\n- Keep reference to the previously provided image URLs conceptually (we will reuse the same images); do not include raw URLs unless necessary.\n- Return STRICT JSON only, matching the schema below. No markdown, no explanations, no extra fields.\n- “nano_prompt” must be an image-generation prompt; “veo_prompt” a short video prompt that uses the Nano image as key visual/first frame.\n- Prefer concise, unambiguous phrasing; include negatives/avoidances if helpful for quality control.\n\nJSON schema:\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"scenario\": { \"type\": \"string\" },\n    \"nano_prompt\": { \"type\": \"string\" },\n    \"veo_prompt\": { \"type\": \"string\" },\n    \"tone\": { \"type\": \"string\" },\n    \"target_audience\": { \"type\": \"string\" }\n  },\n  \"required\": [\"scenario\",\"nano_prompt\",\"veo_prompt\"]\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        1856,
+        -896
+      ],
+      "id": "99630524-8f8a-477e-875a-9968e0fb52d6",
+      "name": "Revise AI Agent"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "REPLACE_WITH_YOUR_GEMINI_API_KEY"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents",
+              "value": "={{ $json.contents }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        -64
+      ],
+      "id": "d6cc72ff-79c3-404c-927c-b2009dbb2227",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "061837ee-264b-4dd8-bd5a-6cddb16b5627",
+              "name": "imageUrls",
+              "value": "={{ $('Aggregate').item.json.dataUrls }}",
+              "type": "string"
+            },
+            {
+              "id": "10852715-1ca4-4581-a24e-90ee8cd736e6",
+              "name": "nano_prompt",
+              "value": "={{\n  $node['AI Agent']?.json?.nano_prompt\n  || (typeof $node['AI Agent']?.json?.output === 'string'\n        ? (JSON.parse($node['AI Agent'].json.output).nano_prompt)\n        : $node['AI Agent']?.json?.output?.nano_prompt)\n  || $node['Revise AI Agent']?.json?.nano_prompt\n  || (typeof $node['Revise AI Agent']?.json?.output === 'string'\n        ? (JSON.parse($node['Revise AI Agent'].json.output).nano_prompt)\n        : $node['Revise AI Agent']?.json?.output?.nano_prompt)\n  || ''\n}}",
+              "type": "string"
+            },
+            {
+              "id": "80279bc3-5129-417b-b0a5-799c64764c38",
+              "name": "output.veo_prompt",
+              "value": "={{\n  $node['AI Agent']?.json?.veo_prompt\n  || (typeof $node['AI Agent']?.json?.output === 'string'\n        ? (JSON.parse($node['AI Agent'].json.output).veo_prompt)\n        : $node['AI Agent']?.json?.output?.veo_prompt)\n  || $node['Revise AI Agent']?.json?.veo_prompt\n  || (typeof $node['Revise AI Agent']?.json?.output === 'string'\n        ? (JSON.parse($node['Revise AI Agent'].json.output).veo_prompt)\n        : $node['Revise AI Agent']?.json?.output?.veo_prompt)\n  || ''\n}}",
+              "type": "string"
+            },
+            {
+              "id": "f56d2236-5b61-45db-b402-ad52ff7f00a0",
+              "name": "output.scenario",
+              "value": "={{\n  $node['AI Agent']?.json?.scenario\n  || (typeof $node['AI Agent']?.json?.output === 'string'\n        ? (JSON.parse($node['AI Agent'].json.output).scenario)\n        : $node['AI Agent']?.json?.output?.scenario)\n  || $node['Revise AI Agent']?.json?.scenario\n  || (typeof $node['Revise AI Agent']?.json?.output === 'string'\n        ? (JSON.parse($node['Revise AI Agent'].json.output).scenario)\n        : $node['Revise AI Agent']?.json?.output?.scenario)\n  || ''\n}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1728,
+        -64
+      ],
+      "id": "23215e0d-eb5d-48be-9781-597ff2e4bfea",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const urls = JSON.parse($json.imageUrls);\nreturn urls.map(u => ({ json: { url: u.secure_url } }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        -64
+      ],
+      "id": "80fe9ee4-7159-4590-ac5a-7d677fd52f53",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2176,
+        -64
+      ],
+      "id": "2bea203c-9ecb-4710-ba77-5aa9c2b196f2",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst images_b64 = [];\nconst mime_types = [];\n\nfor (const item of items) {\n  const file = item.binary?.data;\n  if (file?.data) {\n    images_b64.push(file.data);  // already base64 in n8n\n    mime_types.push(file.mimeType || 'image/jpeg');\n  }\n}\n\nif (images_b64.length === 0) {\n  throw new Error('No binary data found');\n}\n\nreturn [{ json: { images_b64, mime_types } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        -64
+      ],
+      "id": "b2ce7819-e1ab-4c8d-8f92-2812c58a5e8c",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the nano prompt from the agent (revised or original)\nconst nanoPrompt = $('Edit Fields').first().json.nano_prompt;\n\n// Build the parts array with text and images\nconst parts = [{ text: nanoPrompt }];\n\n// Add each image as inline_data\n($json.images_b64 || []).forEach((base64Data, index) => {\n  parts.push({\n    inline_data: {\n      mime_type: $json.mime_types?.[index] || 'image/jpeg',\n      data: base64Data\n    }\n  });\n});\n\n// Return the complete Gemini request body\nreturn [{ json: { contents: [{ parts }] } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        -64
+      ],
+      "id": "9700f45b-bb96-4f24-9853-1d0be91401ad",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "amount": 100
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2896,
+        -64
+      ],
+      "id": "183ab535-54ef-468a-b34a-5bb011aaa296",
+      "name": "Wait",
+      "webhookId": "f06ae2fc-3177-4b9a-a26e-b8cc0a89e70c"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Analyze image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze image": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Revise AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Revise AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          },
+          {
+            "node": "Revise AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Revise AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revise AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "29ec26de-199a-4bbb-ad99-d8a0fc717c8a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "79cffd66a61db621879d318898282b678210168f1d2bb38bd6398180e86a73c2"
+  },
+  "id": "1NsOcbOknw1mbALI",
+  "tags": []
+}
