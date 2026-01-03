@@ -1,2 +1,2 @@
 # n8n_ad_nano_banana
-Takes raw product images and transforms them into fully-fleshed advertising concepts, including production-ready prompts for the latest image and video generation models.
+Automated pipeline that uses a "multi-agent" approach to creative strategy. It doesn't just "write a prompt"; it analyzes the product's visual DNA and reasons through a marketing strategy before suggesting any creative output.
